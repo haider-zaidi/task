@@ -1,57 +1,63 @@
 pipeline {
     agent any
-
     environment {
-        DOCKER_HUB_CREDENTIALS = 'dockerhub-credentials-id'   // Jenkins credential ID
-        DOCKERHUB_USER = 'your-dockerhub-username'
-        BACKEND_IMAGE = 'your-dockerhub-username/sum-backend'
-        FRONTEND_IMAGE = 'your-dockerhub-username/sum-frontend'
+        DOCKER_HUB_CREDENTIALS = 'docker-hub-credentials'  // Jenkins credentials ID for Docker Hub
+        GITHUB_CREDENTIALS = 'github-credentials'          // Jenkins credentials ID for GitHub
+        FRONTEND_IMAGE = 'haiderzaidi123/dockerprojectpractice-frontend'
+        BACKEND_IMAGE = 'haiderzaidi123/dockerprojectpractice-backend'
     }
-
     stages {
-        stage('Checkout') {
-            steps {
-                git 'https://github.com/your-user/sum-app.git'
-            }
-        }
-
-        stage('Build Backend Image') {
-            steps {
-                dir('backend') {
-                    script {
-                        sh "docker build -t $BACKEND_IMAGE ."
-                    }
-                }
-            }
-        }
-
-        stage('Build Frontend Image') {
-            steps {
-                dir('frontend') {
-                    script {
-                        sh "docker build -t $FRONTEND_IMAGE ."
-                    }
-                }
-            }
-        }
-
-        stage('Push Images') {
+        stage('Checkout Code') {
             steps {
                 script {
-                    docker.withRegistry('https://index.docker.io/v1/', DOCKER_HUB_CREDENTIALS) {
-                        sh "docker push $BACKEND_IMAGE"
-                        sh "docker push $FRONTEND_IMAGE"
+                    // Checkout the code from GitHub
+                    checkout scm
+                }
+            }
+        }
+        stage('Build Docker Image Backend') {
+            steps {
+                script {
+                    // Build the Docker image for the backend
+                    bat "docker build -t ${BACKEND_IMAGE} ./backend"  // Adjust the path to the backend directory
+                }
+            }
+        }
+        stage('Build Docker Image Frontend') {
+            steps {
+                script {
+                    // Build the Docker image for the frontend
+                    bat "docker build -t ${FRONTEND_IMAGE} ./frontend"  // Adjust the path to the frontend directory
+                }
+            }
+        }
+        stage('Login to Docker Hub') {
+            steps {
+                script {
+                    // Login to Docker Hub using stored credentials
+                    withCredentials([usernamePassword(credentialsId: DOCKER_HUB_CREDENTIALS, 
+                                                       usernameVariable: 'DOCKER_USER', 
+                                                       passwordVariable: 'DOCKER_PASS')]) {
+                        bat "docker login -u ${DOCKER_USER} -p ${DOCKER_PASS}"
                     }
                 }
             }
         }
-
-        stage('Deploy') {
+        stage('Push Images to Docker Hub') {
             steps {
-                sh 'docker-compose down || true'
-                sh 'docker-compose pull'
-                sh 'docker-compose up -d'
+                script {
+                    // Push the Docker images to Docker Hub
+                    bat "docker push ${BACKEND_IMAGE}"
+                    bat "docker push ${FRONTEND_IMAGE}"
+                }
             }
+        }
+    }
+    post {
+        always {
+            // Clean up the Docker images after the job completes
+            bat "docker rmi ${FRONTEND_IMAGE}"
+            bat "docker rmi ${BACKEND_IMAGE}"
         }
     }
 }
